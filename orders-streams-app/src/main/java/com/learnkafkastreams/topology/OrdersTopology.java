@@ -79,8 +79,8 @@ public class OrdersTopology {
                             generalOrdersStreams.mapValues(ORDER_TO_REVENUE_VALUE_MAPPER)
                                                 .to(GENERAL_ORDERS, Produced.with(Serdes.String(), new JsonSerde<>(Revenue.class)));
 
-                            aggregateOrdersByCount(generalOrdersStreams, GENERAL_ORDERS_COUNT, storesTable);
-                            aggregateTotalRevenueByLocationId(generalOrdersStreams, GENERAL_ORDERS_REVENUE);
+                            aggregateOrdersByCountWithAddress(generalOrdersStreams, GENERAL_ORDERS_COUNT, storesTable);
+                            aggregateTotalRevenueByLocationIdWithAddress(generalOrdersStreams, GENERAL_ORDERS_REVENUE, storesTable);
                         })
                 )
                 .branch(RESTAURANT_BRANCH_PREDICATE,
@@ -89,13 +89,13 @@ public class OrdersTopology {
                             restaurantOrdersStreams.mapValues(ORDER_TO_REVENUE_VALUE_MAPPER)
                                                    .to(RESTAURANT_ORDERS, Produced.with(Serdes.String(), new JsonSerde<>(Revenue.class)));
 
-                            aggregateOrdersByCount(restaurantOrdersStreams, RESTAURANT_ORDERS_COUNT, storesTable);
-                            aggregateTotalRevenueByLocationId(restaurantOrdersStreams, RESTAURANT_ORDERS_REVENUE);
+                            aggregateOrdersByCountWithAddress(restaurantOrdersStreams, RESTAURANT_ORDERS_COUNT, storesTable);
+                            aggregateTotalRevenueByLocationIdWithAddress(restaurantOrdersStreams, RESTAURANT_ORDERS_REVENUE, storesTable);
                         })
                 );
     }
 
-    private static void aggregateOrdersByCount(KStream<String, Order> ordersStreamsBranch, String ordersCountName, KTable<String, Store> storesTable) {
+    private static void aggregateOrdersByCountWithAddress(KStream<String, Order> ordersStreamsBranch, String ordersCountName, KTable<String, Store> storesTable) {
         KTable<String,Long> ordersCountByStoreId = ordersStreamsBranch.map((key, value) -> KeyValue.pair(value.locationId(), value))
                                                                       .groupByKey(Grouped.with(Serdes.String(), new JsonSerde<>(Order.class)))
                                                                       .count(Named.as(ordersCountName), Materialized.as(ordersCountName));
@@ -109,17 +109,29 @@ public class OrdersTopology {
                             .print(Printed.<String, TotalCountWithAddress>toSysOut().withLabel(ordersCountName+"-by-store-id"));
     }
 
-    private static void aggregateTotalRevenueByLocationId(KStream<String, Order> generalOrdersStreams, String storeName) {
+    private static void aggregateTotalRevenueByLocationIdWithAddress(KStream<String, Order> generalOrdersStreams, String storeName, KTable<String, Store> storesTable) {
+        KTable<String,TotalRevenue> totalRevenueByLocationId = buildTotalRevenueByLocationId(generalOrdersStreams, storeName);
+
+        ValueJoiner<TotalRevenue, Store, TotalRevenueWithAddress> valueJoiner = TotalRevenueWithAddress::new;
+
+        totalRevenueByLocationId.join(storesTable, valueJoiner)
+                                .toStream()
+                                .print(Printed.<String, TotalRevenueWithAddress>toSysOut().withLabel(storeName+"-by-location-id-with-address"));
+    }
+
+    private static KTable<String,TotalRevenue> buildTotalRevenueByLocationId(KStream<String, Order> generalOrdersStreams, String storeName) {
         Initializer<TotalRevenue> totalRevenueInitializer = TotalRevenue::new;
 
         Aggregator<String, Order, TotalRevenue> totalRevenueAggregator = (key, order, aggregate) -> aggregate.updateRunningRevenue(key, order);
 
-        generalOrdersStreams.map((key, value) -> KeyValue.pair(value.locationId(), value))
-                            .groupByKey(Grouped.with(Serdes.String(), new JsonSerde<>(Order.class)))
-                            .aggregate(totalRevenueInitializer, totalRevenueAggregator, Materialized.<String, TotalRevenue, KeyValueStore<Bytes, byte[]>>as(storeName)
-                                                                                                    .withKeySerde(Serdes.String())
-                                                                                                    .withValueSerde(new JsonSerde<>(TotalRevenue.class)))
-                            .toStream()
-                            .print(Printed.<String, TotalRevenue>toSysOut().withLabel(storeName));
+        KTable<String,TotalRevenue> totalRevenueByLocationId = generalOrdersStreams.map((key, value) -> KeyValue.pair(value.locationId(), value))
+                                                                                   .groupByKey(Grouped.with(Serdes.String(), new JsonSerde<>(Order.class)))
+                                                                                   .aggregate(totalRevenueInitializer, totalRevenueAggregator, Materialized.<String, TotalRevenue, KeyValueStore<Bytes, byte[]>>as(storeName)
+                                                                                                                                                           .withKeySerde(Serdes.String())
+                                                                                                                                                           .withValueSerde(new JsonSerde<>(TotalRevenue.class)));
+        totalRevenueByLocationId.toStream()
+                                .print(Printed.<String, TotalRevenue>toSysOut().withLabel(storeName));
+
+        return totalRevenueByLocationId;
     }
 }
