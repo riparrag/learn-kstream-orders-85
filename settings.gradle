@@ -1,0 +1,4 @@
+rootProject.name = 'learn-kstream-orders-85'
+include 'orders-domain'
+include 'orders-streams-app'
+
