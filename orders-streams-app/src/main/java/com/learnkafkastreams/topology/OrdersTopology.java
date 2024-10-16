@@ -114,7 +114,6 @@ public class OrdersTopology {
 
         Aggregator<String, Order, TotalRevenue> totalRevenueAggregator = (key, order, aggregate) -> aggregate.updateRunningRevenue(key, order);
 
-        KeyValueMapper<String, Order, TotalRevenue> keyValueMapper = null;
         generalOrdersStreams.map((key, value) -> KeyValue.pair(value.locationId(), value))
                             .groupByKey(Grouped.with(Serdes.String(), new JsonSerde<>(Order.class)))
                             .aggregate(totalRevenueInitializer, totalRevenueAggregator, Materialized.<String, TotalRevenue, KeyValueStore<Bytes, byte[]>>as(storeName)
