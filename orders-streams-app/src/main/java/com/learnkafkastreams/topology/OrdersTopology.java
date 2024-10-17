@@ -172,9 +172,10 @@ public class OrdersTopology {
         KStream<Windowed<String>, TotalRevenue> totalRevenueBy15Secs = generalOrdersStreams.map((key, value) -> KeyValue.pair(value.locationId(), value))
                                                                                           .groupByKey(Grouped.with(Serdes.String(), new JsonSerde<>(Order.class)))
                                                                                           .windowedBy(timeWindows)
-                                                                                          .aggregate(totalRevenueInitializer, totalRevenueAggregator, Materialized.<String, TotalRevenue, WindowStore<Bytes, byte[]>>as(ordersRevenueWindowsName)
-                                                                                                  .withKeySerde(Serdes.String())
-                                                                                                  .withValueSerde(new JsonSerde<>(TotalRevenue.class)))
+                                                                                          .aggregate(totalRevenueInitializer, totalRevenueAggregator,
+                                                                                                     Materialized.<String, TotalRevenue, WindowStore<Bytes, byte[]>>as(ordersRevenueWindowsName)
+                                                                                                                 .withKeySerde(Serdes.String())
+                                                                                                                 .withValueSerde(new JsonSerde<>(TotalRevenue.class)))
                                                                                           .toStream();
         totalRevenueBy15Secs.peek((key, value) -> {
                                 log.info("windowed 15s {}: key {}, value {}", ordersRevenueWindowsName, key, value);
