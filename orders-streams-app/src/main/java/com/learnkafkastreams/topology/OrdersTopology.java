@@ -9,12 +9,12 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.*;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.WindowStore;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.cglib.core.Local;
 import org.springframework.kafka.support.serializer.JsonSerde;
 import org.springframework.stereotype.Component;
 
-import java.time.*;
+import java.time.Duration;
 
 @Component
 @Slf4j
@@ -82,9 +82,10 @@ public class OrdersTopology {
                             generalOrdersStreams.mapValues(ORDER_TO_REVENUE_VALUE_MAPPER)
                                                 .to(GENERAL_ORDERS, Produced.with(Serdes.String(), new JsonSerde<>(Revenue.class)));
 
-                            //aggregateOrdersByCountWithAddress(generalOrdersStreams, GENERAL_ORDERS_COUNT, storesTable);
-                            aggregateOrdersCountsByTimeWindows(generalOrdersStreams, GENERAL_ORDERS_COUNT_WINDOWS, storesTable);
-                            //aggregateTotalRevenueByLocationIdWithAddress(generalOrdersStreams, GENERAL_ORDERS_REVENUE, storesTable);
+                            aggregateOrdersByCountWithAddress(generalOrdersStreams,            GENERAL_ORDERS_COUNT, storesTable);
+                            aggregateOrdersCountsByTimeWindows(generalOrdersStreams,           GENERAL_ORDERS_COUNT_WINDOWS, storesTable);
+                            aggregateTotalRevenueByLocationIdWithAddress(generalOrdersStreams, GENERAL_ORDERS_REVENUE, storesTable);
+                            aggregateTotalRevenueByTimeWinows(generalOrdersStreams,            GENERAL_ORDERS_REVENUE_WINDOWS, storesTable);
                         })
                 )
                 .branch(RESTAURANT_BRANCH_PREDICATE,
@@ -93,9 +94,10 @@ public class OrdersTopology {
                             restaurantOrdersStreams.mapValues(ORDER_TO_REVENUE_VALUE_MAPPER)
                                                    .to(RESTAURANT_ORDERS, Produced.with(Serdes.String(), new JsonSerde<>(Revenue.class)));
 
-                            //aggregateOrdersByCountWithAddress(restaurantOrdersStreams, RESTAURANT_ORDERS_COUNT, storesTable);
-                            aggregateOrdersCountsByTimeWindows(restaurantOrdersStreams, RESTAURANT_ORDERS_COUNT_WINDOWS, storesTable);
-                            //aggregateTotalRevenueByLocationIdWithAddress(restaurantOrdersStreams, RESTAURANT_ORDERS_REVENUE, storesTable);
+                            aggregateOrdersByCountWithAddress(restaurantOrdersStreams,            RESTAURANT_ORDERS_COUNT, storesTable);
+                            aggregateOrdersCountsByTimeWindows(restaurantOrdersStreams,           RESTAURANT_ORDERS_COUNT_WINDOWS, storesTable);
+                            aggregateTotalRevenueByLocationIdWithAddress(restaurantOrdersStreams, RESTAURANT_ORDERS_REVENUE, storesTable);
+                            aggregateTotalRevenueByTimeWinows(restaurantOrdersStreams,            RESTAURANT_ORDERS_REVENUE_WINDOWS, storesTable);
                         })
                 );
     }
@@ -109,6 +111,7 @@ public class OrdersTopology {
 
         ValueJoiner<Long, Store, TotalCountWithAddress> valueJoiner = TotalCountWithAddress::new;
 
+        //KTable join KTable
         ordersCountByStoreId.join(storesTable, valueJoiner)
                             .toStream()
                             .print(Printed.<String, TotalCountWithAddress>toSysOut().withLabel(ordersCountName+"-by-store-id"));
@@ -119,6 +122,7 @@ public class OrdersTopology {
 
         ValueJoiner<TotalRevenue, Store, TotalRevenueWithAddress> valueJoiner = TotalRevenueWithAddress::new;
 
+        //KTable join KTable
         totalRevenueByLocationId.join(storesTable, valueJoiner)
                                 .toStream()
                                 .print(Printed.<String, TotalRevenueWithAddress>toSysOut().withLabel(storeName+"-by-location-id-with-address"));
@@ -152,18 +156,37 @@ public class OrdersTopology {
                            .toStream()
                            .peek((key, value) -> {
                                log.info("windowed 15s {}: key {}, value {}", ordersCountName, key, value);
-                               printLocalDateTime(key, value);
+                               OrderTimeStampExtractor.printLocalDateTime(key, value);
                            })
                            .print(Printed.<Windowed<String>,Long>toSysOut().withLabel(ordersCountName+"-windowed-15s"));
     }
 
-    private static void printLocalDateTime(Windowed<String> key, Long value) {
-        Instant startTime = key.window().startTime();
-        Instant endTime = key.window().endTime();
-        log.info("startTime: {}, endTime: {}, key {}, count {}", startTime, endTime, key.key(), value);
+    private static void aggregateTotalRevenueByTimeWinows(KStream<String, Order> generalOrdersStreams, String ordersRevenueWindowsName, KTable<String, Store> storesTable) {
+        Duration winSize = Duration.ofSeconds(15);
+        TimeWindows timeWindows = TimeWindows.ofSizeWithNoGrace(winSize);
 
-        LocalDateTime startLDT = LocalDateTime.ofInstant(startTime, ZoneOffset.UTC.normalized());
-        LocalDateTime endLDT = LocalDateTime.ofInstant(endTime, ZoneOffset.UTC.normalized());
-        log.info("startLDT: {}, endLDT: {}, key {}, count {}", startLDT, endLDT, key.key(), value);
+        Initializer<TotalRevenue> totalRevenueInitializer = TotalRevenue::new;
+
+        Aggregator<String, Order, TotalRevenue> totalRevenueAggregator = (key, order, aggregate) -> aggregate.updateRunningRevenue(key, order);
+
+        KStream<Windowed<String>, TotalRevenue> totalRevenueBy15Secs = generalOrdersStreams.map((key, value) -> KeyValue.pair(value.locationId(), value))
+                                                                                          .groupByKey(Grouped.with(Serdes.String(), new JsonSerde<>(Order.class)))
+                                                                                          .windowedBy(timeWindows)
+                                                                                          .aggregate(totalRevenueInitializer, totalRevenueAggregator, Materialized.<String, TotalRevenue, WindowStore<Bytes, byte[]>>as(ordersRevenueWindowsName)
+                                                                                                  .withKeySerde(Serdes.String())
+                                                                                                  .withValueSerde(new JsonSerde<>(TotalRevenue.class)))
+                                                                                          .toStream();
+        totalRevenueBy15Secs.peek((key, value) -> {
+                                log.info("windowed 15s {}: key {}, value {}", ordersRevenueWindowsName, key, value);
+                                OrderTimeStampExtractor.printLocalDateTime(key, value);
+                            })
+                            .print(Printed.<Windowed<String>, TotalRevenue>toSysOut().withLabel(ordersRevenueWindowsName));
+
+        ValueJoiner<TotalRevenue, Store, TotalRevenueWithAddress> valueJoiner = TotalRevenueWithAddress::new;
+
+        //KStream(windowed) join KTable
+        totalRevenueBy15Secs.map((key, value) -> KeyValue.pair(key.key(), value))
+                            .join(storesTable, valueJoiner, Joined.with(Serdes.String(), new JsonSerde<>(TotalRevenue.class), new JsonSerde<>(Store.class)))
+                            .print(Printed.<String, TotalRevenueWithAddress>toSysOut().withLabel(ordersRevenueWindowsName+"-bystore"));
     }
 }
