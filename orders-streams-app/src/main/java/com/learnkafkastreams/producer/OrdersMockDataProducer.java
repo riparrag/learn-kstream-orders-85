@@ -13,6 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.List;
 
 import static com.learnkafkastreams.producer.ProducerUtil.publishMessageSync;
@@ -27,8 +28,8 @@ public class OrdersMockDataProducer {
                 .configure(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, false);
 
 
-        publishOrders(objectMapper, buildOrders());
-        //publishBulkOrders(objectMapper);
+        //publishOrders(objectMapper, buildOrders());
+        publishBulkOrders(objectMapper);
 
         /**
          * To test grace period.
@@ -257,7 +258,7 @@ public class OrdersMockDataProducer {
                 new BigDecimal("27.00"),
                 OrderType.GENERAL,
                 orderItems,
-                LocalDateTime.parse("2023-02-27T08:45:58")
+                LocalDateTime.parse("2024-10-17T08:30:00")
                 //LocalDateTime.now(ZoneId.of("UTC"))
         );
 
@@ -265,7 +266,7 @@ public class OrdersMockDataProducer {
                 new BigDecimal("15.00"),
                 OrderType.RESTAURANT,
                 orderItemsRestaurant,
-                LocalDateTime.parse("2023-02-27T08:45:58")
+                LocalDateTime.parse("2024-10-17T08:30:00")
                 //LocalDateTime.now(ZoneId.of("UTC"))
         );
 
@@ -274,7 +275,7 @@ public class OrdersMockDataProducer {
                 OrderType.GENERAL,
                 orderItems,
                 //LocalDateTime.now()
-                LocalDateTime.parse("2023-02-27T08:45:58")
+                LocalDateTime.parse("2024-10-17T08:30:00")
                 //LocalDateTime.now(ZoneId.of("UTC"))
         );
 
@@ -283,7 +284,7 @@ public class OrdersMockDataProducer {
                 OrderType.RESTAURANT,
                 orderItems,
                 //LocalDateTime.now()
-                LocalDateTime.parse("2023-02-27T08:45:58")
+                LocalDateTime.parse("2024-10-17T08:30:00")
                 //LocalDateTime.now(ZoneId.of("UTC"))
         );
 

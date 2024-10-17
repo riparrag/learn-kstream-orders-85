@@ -10,8 +10,11 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.*;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cglib.core.Local;
 import org.springframework.kafka.support.serializer.JsonSerde;
 import org.springframework.stereotype.Component;
+
+import java.time.*;
 
 @Component
 @Slf4j
@@ -79,8 +82,9 @@ public class OrdersTopology {
                             generalOrdersStreams.mapValues(ORDER_TO_REVENUE_VALUE_MAPPER)
                                                 .to(GENERAL_ORDERS, Produced.with(Serdes.String(), new JsonSerde<>(Revenue.class)));
 
-                            aggregateOrdersByCountWithAddress(generalOrdersStreams, GENERAL_ORDERS_COUNT, storesTable);
-                            aggregateTotalRevenueByLocationIdWithAddress(generalOrdersStreams, GENERAL_ORDERS_REVENUE, storesTable);
+                            //aggregateOrdersByCountWithAddress(generalOrdersStreams, GENERAL_ORDERS_COUNT, storesTable);
+                            aggregateOrdersCountsByTimeWindows(generalOrdersStreams, GENERAL_ORDERS_COUNT_WINDOWS, storesTable);
+                            //aggregateTotalRevenueByLocationIdWithAddress(generalOrdersStreams, GENERAL_ORDERS_REVENUE, storesTable);
                         })
                 )
                 .branch(RESTAURANT_BRANCH_PREDICATE,
@@ -89,8 +93,9 @@ public class OrdersTopology {
                             restaurantOrdersStreams.mapValues(ORDER_TO_REVENUE_VALUE_MAPPER)
                                                    .to(RESTAURANT_ORDERS, Produced.with(Serdes.String(), new JsonSerde<>(Revenue.class)));
 
-                            aggregateOrdersByCountWithAddress(restaurantOrdersStreams, RESTAURANT_ORDERS_COUNT, storesTable);
-                            aggregateTotalRevenueByLocationIdWithAddress(restaurantOrdersStreams, RESTAURANT_ORDERS_REVENUE, storesTable);
+                            //aggregateOrdersByCountWithAddress(restaurantOrdersStreams, RESTAURANT_ORDERS_COUNT, storesTable);
+                            aggregateOrdersCountsByTimeWindows(restaurantOrdersStreams, RESTAURANT_ORDERS_COUNT_WINDOWS, storesTable);
+                            //aggregateTotalRevenueByLocationIdWithAddress(restaurantOrdersStreams, RESTAURANT_ORDERS_REVENUE, storesTable);
                         })
                 );
     }
@@ -133,5 +138,32 @@ public class OrdersTopology {
                                 .print(Printed.<String, TotalRevenue>toSysOut().withLabel(storeName));
 
         return totalRevenueByLocationId;
+    }
+
+    private static void aggregateOrdersCountsByTimeWindows(KStream<String, Order> ordersStreamsBranch, String ordersCountName, KTable<String, Store> storesTable) {
+        Duration winSize = Duration.ofSeconds(15);
+        TimeWindows timeWindows = TimeWindows.ofSizeWithNoGrace(winSize);
+
+        ordersStreamsBranch.map((key, value) -> KeyValue.pair(value.locationId(), value))
+                           .groupByKey(Grouped.with(Serdes.String(), new JsonSerde<>(Order.class)))
+                           .windowedBy(timeWindows)
+                           .count(Named.as(ordersCountName+"-windowed-15s"), Materialized.as(ordersCountName+"-windowed-15s"))
+                           .suppress(Suppressed.untilWindowCloses(Suppressed.BufferConfig.unbounded().shutDownWhenFull()))
+                           .toStream()
+                           .peek((key, value) -> {
+                               log.info("windowed 15s {}: key {}, value {}", ordersCountName, key, value);
+                               printLocalDateTime(key, value);
+                           })
+                           .print(Printed.<Windowed<String>,Long>toSysOut().withLabel(ordersCountName+"-windowed-15s"));
+    }
+
+    private static void printLocalDateTime(Windowed<String> key, Long value) {
+        Instant startTime = key.window().startTime();
+        Instant endTime = key.window().endTime();
+        log.info("startTime: {}, endTime: {}, key {}, count {}", startTime, endTime, key.key(), value);
+
+        LocalDateTime startLDT = LocalDateTime.ofInstant(startTime, ZoneOffset.UTC.normalized());
+        LocalDateTime endLDT = LocalDateTime.ofInstant(endTime, ZoneOffset.UTC.normalized());
+        log.info("startLDT: {}, endLDT: {}, key {}, count {}", startLDT, endLDT, key.key(), value);
     }
 }
