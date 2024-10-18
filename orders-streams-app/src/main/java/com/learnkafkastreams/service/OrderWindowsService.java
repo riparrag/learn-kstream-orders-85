@@ -1,6 +1,5 @@
 package com.learnkafkastreams.service;
 
-import com.learnkafkastreams.domain.AllOrdersCountPerStoreDTO;
 import com.learnkafkastreams.domain.OrdersCountPerStoreByWindowsDTO;
 import com.learnkafkastreams.topology.OrdersTopology;
 import com.learnkafkastreams.util.OrdersUtil;
@@ -12,16 +11,11 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
 import java.time.ZoneOffset;
-import java.util.List;
-import java.util.Optional;
-import java.util.Spliterator;
-import java.util.Spliterators;
+import java.util.*;
 import java.util.stream.StreamSupport;
-
-import static com.learnkafkastreams.util.OrdersUtil.getOrderTypeFromTopology;
 
 @AllArgsConstructor
 @Service
@@ -30,9 +24,17 @@ public class OrderWindowsService {
     private final OrderStoreService orderStoreService;
 
     public List<OrdersCountPerStoreByWindowsDTO> getWindowedOrdersCounts(String orderType, String locationId) {
+        return getWindowedOrdersCounts(orderType, locationId, (Instant) null, null);
+    }
+
+    public List<OrdersCountPerStoreByWindowsDTO> getWindowedOrdersCounts(String orderType, String locationId, LocalDateTime timeFrom, LocalDateTime timeTo) {
+        return getWindowedOrdersCounts(orderType, locationId, timeFrom.toInstant(ZoneOffset.UTC), timeTo.toInstant(ZoneOffset.UTC));
+    }
+
+    public List<OrdersCountPerStoreByWindowsDTO> getWindowedOrdersCounts(String orderType, String locationId, Instant timeFrom, Instant timeTo) {
         ReadOnlyWindowStore<String, Long> orderCountWindowStore = orderStoreService.getOrderCountWindowStore(orderType);
 
-        KeyValueIterator<Windowed<String>, Long> windowedOrdersCount = orderCountWindowStore.all();
+        KeyValueIterator<Windowed<String>, Long> windowedOrdersCount = Objects.isNull(timeFrom) ? orderCountWindowStore.all() : orderCountWindowStore.fetchAll(timeFrom, timeTo);
 
         Spliterator<KeyValue<Windowed<String>, Long>> spliterator = Spliterators.spliteratorUnknownSize(windowedOrdersCount,0);
 
@@ -40,7 +42,14 @@ public class OrderWindowsService {
                 .filter(keyValue -> Optional.ofNullable(locationId).map(l->keyValue.key.key().equals(l)).orElse(true))
                 .map((keyValue) -> buildDto(keyValue, orderType))
                 .toList();
+    }
 
+    public List<OrdersCountPerStoreByWindowsDTO> getAllWindowOrdersCountsByRange(LocalDateTime fromTime, LocalDateTime toTime) {
+        return List.of(OrdersTopology.GENERAL_ORDERS, OrdersTopology.RESTAURANT_ORDERS)
+                .stream()
+                .map(orderType -> getWindowedOrdersCounts(orderType, null, fromTime, toTime).stream().toList())
+                .flatMap(List::stream)
+                .toList();
     }
 
     public List<OrdersCountPerStoreByWindowsDTO> getAllWindowOrdersCounts(String locationId) {
