@@ -3,13 +3,20 @@ package com.learnkafkastreams.service;
 import com.learnkafkastreams.domain.AllOrdersCountPerStoreDTO;
 import com.learnkafkastreams.domain.OrderCountPerStoreDTO;
 import com.learnkafkastreams.domain.OrderType;
+import com.learnkafkastreams.topology.OrdersTopology;
+import io.micrometer.common.util.StringUtils;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Spliterator;
 import java.util.Spliterators;
+import java.util.function.Function;
 import java.util.stream.StreamSupport;
 
 @AllArgsConstructor
@@ -18,22 +25,45 @@ import java.util.stream.StreamSupport;
 public class OrderService {
     private final OrderStoreService orderStoreService;
 
+    public List<OrderCountPerStoreDTO> getOrdersCountPerStore(String orderType) {
+        return this.getOrdersCountPerStore(orderType, null);
+    }
+
     public List<OrderCountPerStoreDTO> getOrdersCountPerStore(String orderType, String locationId) {
-
-
-        var orderCountStore = orderStoreService.getOrderCountStore(orderType);
-
-        var ordersCountsPerStore = orderCountStore.all();
-
-        var spliterator = Spliterators.spliteratorUnknownSize(ordersCountsPerStore,0);
+        ReadOnlyKeyValueStore<String, Long> orderCountStore = orderStoreService.getOrderCountStore(orderType);
+        KeyValueIterator<String, Long> ordersCountsPerStore = orderCountStore.all();
+        Spliterator<KeyValue<String, Long>> spliterator = Spliterators.spliteratorUnknownSize(ordersCountsPerStore,0);
 
         return StreamSupport.stream(spliterator,false)
-                            .map((keyValue) -> new OrderCountPerStoreDTO(keyValue.key, keyValue.value))
+                .filter(keyValue -> Optional.ofNullable(locationId).map(l->keyValue.key.equals(l)).orElse(true))
+                .map((keyValue) -> new OrderCountPerStoreDTO(keyValue.key, keyValue.value))
                             .toList();
     }
 
     public List<AllOrdersCountPerStoreDTO> getAllOrdersCountPerStore() {
-        //return getAllOrderCountStore();
-        return null;
+        return List.of(OrdersTopology.GENERAL_ORDERS, OrdersTopology.RESTAURANT_ORDERS)
+                   .stream()
+                   .map(orderType -> getOrdersCountPerStore(orderType).stream()
+                                                                      .map(o -> new AllOrdersCountPerStoreDTO(o.locationId(), o.orderCount(), getOrderTypeFromTopology(orderType)))
+                                                                      .toList())
+                   .flatMap(List::stream)
+                   .toList();
+    }
+
+    public OrderCountPerStoreDTO getOrdersCountByLocationId(String orderType, String locationId) {
+        if (StringUtils.isBlank(locationId)) {
+            return null;
+        }
+        ReadOnlyKeyValueStore<String, Long> orderCountStore = orderStoreService.getOrderCountStore(orderType);
+        Long ordersCounts = orderCountStore.get(locationId);
+        return new OrderCountPerStoreDTO(locationId, ordersCounts);
+    }
+
+    private OrderType getOrderTypeFromTopology(String orderTopologyType) {
+        return switch (orderTopologyType) {
+            case OrdersTopology.GENERAL_ORDERS -> OrderType.GENERAL;
+            case OrdersTopology.RESTAURANT_ORDERS -> OrderType.RESTAURANT;
+            default -> null;
+        };
     }
 }

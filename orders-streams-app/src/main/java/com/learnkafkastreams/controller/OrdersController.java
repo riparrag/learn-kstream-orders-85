@@ -6,6 +6,7 @@ import com.learnkafkastreams.domain.OrderRevenueDTO;
 import com.learnkafkastreams.domain.OrdersCountPerStoreByWindowsDTO;
 import com.learnkafkastreams.service.OrderService;
 import lombok.AllArgsConstructor;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -19,44 +20,50 @@ public class OrdersController {
      * @return Retrieve All Orders Count for All Types
      */
     @GetMapping("/count")
-    public List<AllOrdersCountPerStoreDTO> getAllOrdersCounts() {
+    public ResponseEntity<List<AllOrdersCountPerStoreDTO>> getAllOrdersCounts() {
+        return ResponseEntity.ok(orderService.getAllOrdersCountPerStore());
+    }
 
-        return orderService.getAllOrdersCountPerStore();
+    /**
+     * @return Retrieve Orders Count By Order Type & Location Id
+     */
+    @GetMapping("/count/{orderType}/{location_id}")
+    public ResponseEntity<OrderCountPerStoreDTO> getOrdersCountByLocationId(@PathVariable("orderType") String orderType, @PathVariable("location_id") String locationId) {
+        return ResponseEntity.ok(orderService.getOrdersCountByLocationId(orderType, locationId));
     }
 
     /**
      * @return Retrieve Orders Count By Order Type & Location Id
      */
     @GetMapping("/count/{orderType}")
-    public List<OrderCountPerStoreDTO> getOrdersCountPerStore(@PathVariable("orderType") String orderType, @RequestParam(value = "location_id", required=false) String locationId) {
-
-        return orderService.getOrdersCountPerStore(orderType, locationId);
+    public ResponseEntity<List<OrderCountPerStoreDTO>> getOrdersCountPerStore(@PathVariable("orderType") String orderType, @RequestParam(value = "location_id", required=false) String locationId) {
+        return ResponseEntity.ok(orderService.getOrdersCountPerStore(orderType, locationId));
     }
 
     /**
      * @return All Orders Count for  Windows by Order Type
      */
     @GetMapping("/windows/count/{orderType}")
-    public List<OrdersCountPerStoreByWindowsDTO> getWindowedOrdersCountPerStore(@PathVariable("orderType") String orderType, @RequestParam("location_id") String locationId) {
+    public ResponseEntity<List<OrdersCountPerStoreByWindowsDTO>> getWindowedOrdersCountPerStore(@PathVariable("orderType") String orderType, @RequestParam("location_id") String locationId) {
 
-        return null;
+        return ResponseEntity.ok(null);
     }
 
     /**
      * @return Retrieve Revenue for All Types
      */
     @GetMapping("/revenue")
-    public List<OrderRevenueDTO> getAllRevenues() {
+    public ResponseEntity<List<OrderRevenueDTO>> getAllRevenues() {
 
-        return null;
+        return ResponseEntity.ok(null);
     }
 
     /**
      * @return Retrieve Revenue By Order Type
      */
     @GetMapping("/revenue/{orderType}")
-    public List<OrderRevenueDTO> getOrdersRevenue(@PathVariable("orderType") String orderType) {
+    public ResponseEntity<List<OrderRevenueDTO>> getOrdersRevenue(@PathVariable("orderType") String orderType) {
 
-        return null;
+        return ResponseEntity.ok(null);
     }
 }
