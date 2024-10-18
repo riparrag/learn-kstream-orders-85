@@ -24,7 +24,7 @@ public class OrderStoreService {
         return switch (orderType) {
             case GENERAL_ORDERS -> getKeyValueStore(GENERAL_ORDERS_COUNT);
             case RESTAURANT_ORDERS -> getKeyValueStore(RESTAURANT_ORDERS_COUNT);
-            default -> throw new IllegalArgumentException("no valid order type");
+            default -> throw new IllegalArgumentException("Not valid order type, you sent: "+orderType+ ", possibles values: "+ GENERAL_ORDERS +", "+ RESTAURANT_ORDERS);
         };
     }
 
@@ -32,7 +32,7 @@ public class OrderStoreService {
         return switch (orderType) {
             case GENERAL_ORDERS -> getKeyValueStore(GENERAL_ORDERS_REVENUE);
             case RESTAURANT_ORDERS -> getKeyValueStore(RESTAURANT_ORDERS_REVENUE);
-            default -> throw new IllegalArgumentException("no valid order type");
+            default -> throw new IllegalArgumentException("Not valid order type, you sent: "+orderType+ ", possibles values: "+ GENERAL_ORDERS +", "+ RESTAURANT_ORDERS);
         };
     }
 
