@@ -18,6 +18,8 @@ import java.util.Spliterators;
 import java.util.function.Function;
 import java.util.stream.StreamSupport;
 
+import static com.learnkafkastreams.util.OrdersUtil.getOrderTypeFromTopology;
+
 @AllArgsConstructor
 @Service
 @Slf4j
@@ -67,13 +69,5 @@ public class OrderService {
         ReadOnlyKeyValueStore<String, Long> orderCountStore = orderStoreService.getOrderCountStore(orderType);
         Long ordersCounts = orderCountStore.get(locationId);
         return new OrderCountPerStoreDTO(locationId, ordersCounts);
-    }
-
-    private OrderType getOrderTypeFromTopology(String orderTopologyType) {
-        return switch (orderTopologyType) {
-            case OrdersTopology.GENERAL_ORDERS -> OrderType.GENERAL;
-            case OrdersTopology.RESTAURANT_ORDERS -> OrderType.RESTAURANT;
-            default -> null;
-        };
     }
 }

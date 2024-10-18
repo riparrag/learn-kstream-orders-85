@@ -3,7 +3,6 @@ package com.learnkafkastreams.controller;
 import com.learnkafkastreams.domain.AllOrdersCountPerStoreDTO;
 import com.learnkafkastreams.domain.OrderCountPerStoreDTO;
 import com.learnkafkastreams.domain.OrderRevenueDTO;
-import com.learnkafkastreams.domain.OrdersCountPerStoreByWindowsDTO;
 import com.learnkafkastreams.service.OrderService;
 import lombok.AllArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -41,20 +40,10 @@ public class OrdersController {
     }
 
     /**
-     * @return All Orders Count for  Windows by Order Type
-     */
-    @GetMapping("/windows/count/{orderType}/{location_id}")
-    public ResponseEntity<List<OrdersCountPerStoreByWindowsDTO>> getWindowedOrdersCountPerStore(@PathVariable("orderType") String orderType, @PathVariable(value="location_id", required=false) String locationId) {
-
-        return ResponseEntity.ok(null);
-    }
-
-    /**
      * @return Retrieve Revenue for All Types
      */
     @GetMapping("/revenue")
     public ResponseEntity<List<OrderRevenueDTO>> getAllRevenues() {
-
         return ResponseEntity.ok(null);
     }
 

@@ -34,6 +34,9 @@ public class OrdersTopology {
     public static final String RESTAURANT_ORDERS_COUNT_WINDOWS = "restaurant_orders_count_window";
     public static final String RESTAURANT_ORDERS_REVENUE_WINDOWS = "restaurant_orders_revenue_window";
 
+    public static final String WINDOWED_BY_15secs = "-windowed-15s";
+
+
     private static final Predicate<String, Order> GENERAL_BRANCH_PREDICATE = (key, order) -> order.orderType().equals(OrderType.GENERAL);
     private static final Predicate<String, Order> RESTAURANT_BRANCH_PREDICATE = (key, order) -> order.orderType().equals(OrderType.RESTAURANT);
 
@@ -151,14 +154,14 @@ public class OrdersTopology {
         ordersStreamsBranch.map((key, value) -> KeyValue.pair(value.locationId(), value))
                            .groupByKey(Grouped.with(Serdes.String(), new JsonSerde<>(Order.class)))
                            .windowedBy(timeWindows)
-                           .count(Named.as(ordersCountName+"-windowed-15s"), Materialized.as(ordersCountName+"-windowed-15s"))
+                           .count(Named.as(ordersCountName+WINDOWED_BY_15secs), Materialized.as(ordersCountName+WINDOWED_BY_15secs))
                            .suppress(Suppressed.untilWindowCloses(Suppressed.BufferConfig.unbounded().shutDownWhenFull()))
                            .toStream()
                            .peek((key, value) -> {
                                log.info("windowed 15s {}: key {}, value {}", ordersCountName, key, value);
                                OrderTimeStampExtractor.printLocalDateTime(key, value);
                            })
-                           .print(Printed.<Windowed<String>,Long>toSysOut().withLabel(ordersCountName+"-windowed-15s"));
+                           .print(Printed.<Windowed<String>,Long>toSysOut().withLabel(ordersCountName+WINDOWED_BY_15secs));
     }
 
     private static void aggregateTotalRevenueByTimeWinows(KStream<String, Order> generalOrdersStreams, String ordersRevenueWindowsName, KTable<String, Store> storesTable) {
