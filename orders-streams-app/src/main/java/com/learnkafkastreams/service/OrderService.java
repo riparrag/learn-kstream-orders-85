@@ -1,8 +1,6 @@
 package com.learnkafkastreams.service;
 
-import com.learnkafkastreams.domain.AllOrdersCountPerStoreDTO;
-import com.learnkafkastreams.domain.OrderCountPerStoreDTO;
-import com.learnkafkastreams.domain.OrderType;
+import com.learnkafkastreams.domain.*;
 import com.learnkafkastreams.topology.OrdersTopology;
 import io.micrometer.common.util.StringUtils;
 import lombok.AllArgsConstructor;
@@ -12,6 +10,7 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 import java.util.Spliterator;
@@ -35,9 +34,20 @@ public class OrderService {
         Spliterator<KeyValue<String, Long>> spliterator = Spliterators.spliteratorUnknownSize(ordersCountsPerStore,0);
 
         return StreamSupport.stream(spliterator,false)
-                .filter(keyValue -> Optional.ofNullable(locationId).map(l->keyValue.key.equals(l)).orElse(true))
-                .map((keyValue) -> new OrderCountPerStoreDTO(keyValue.key, keyValue.value))
+                            .filter(keyValue -> Optional.ofNullable(locationId).map(l->keyValue.key.equals(l)).orElse(true))
+                            .map((keyValue) -> new OrderCountPerStoreDTO(keyValue.key, keyValue.value))
                             .toList();
+    }
+
+    public List<OrderRevenueDTO> getOrdersRevenuesPerStore(String orderType, String locationId) {
+        ReadOnlyKeyValueStore<String, TotalRevenue> orderRevenueStore = orderStoreService.getOrderRevenueStore(orderType);
+        KeyValueIterator<String, TotalRevenue> ordersRevenuesPerStore = orderRevenueStore.all();
+        Spliterator<KeyValue<String, TotalRevenue>> spliterator = Spliterators.spliteratorUnknownSize(ordersRevenuesPerStore,0);
+
+        return StreamSupport.stream(spliterator,false)
+                .filter(keyValue -> Optional.ofNullable(locationId).map(l->keyValue.key.equals(l)).orElse(true))
+                .map((keyValue) -> new OrderRevenueDTO(keyValue.key, getOrderTypeFromTopology(orderType), keyValue.value))
+                .toList();
     }
 
     public List<AllOrdersCountPerStoreDTO> getAllOrdersCountPerStore() {

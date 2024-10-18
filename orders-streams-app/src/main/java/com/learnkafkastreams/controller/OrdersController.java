@@ -43,8 +43,8 @@ public class OrdersController {
     /**
      * @return All Orders Count for  Windows by Order Type
      */
-    @GetMapping("/windows/count/{orderType}")
-    public ResponseEntity<List<OrdersCountPerStoreByWindowsDTO>> getWindowedOrdersCountPerStore(@PathVariable("orderType") String orderType, @RequestParam("location_id") String locationId) {
+    @GetMapping("/windows/count/{orderType}/{location_id}")
+    public ResponseEntity<List<OrdersCountPerStoreByWindowsDTO>> getWindowedOrdersCountPerStore(@PathVariable("orderType") String orderType, @PathVariable(value="location_id", required=false) String locationId) {
 
         return ResponseEntity.ok(null);
     }
@@ -62,8 +62,7 @@ public class OrdersController {
      * @return Retrieve Revenue By Order Type
      */
     @GetMapping("/revenue/{orderType}")
-    public ResponseEntity<List<OrderRevenueDTO>> getOrdersRevenue(@PathVariable("orderType") String orderType) {
-
-        return ResponseEntity.ok(null);
+    public ResponseEntity<List<OrderRevenueDTO>> getOrdersRevenue(@PathVariable("orderType") String orderType, @PathVariable(value="location_id", required=false) String locationId) {
+        return ResponseEntity.ok(orderService.getOrdersRevenuesPerStore(orderType, locationId));
     }
 }

@@ -1,5 +1,6 @@
 package com.learnkafkastreams.service;
 
+import com.learnkafkastreams.domain.TotalRevenue;
 import lombok.AllArgsConstructor;
 import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.state.QueryableStoreType;
@@ -8,6 +9,7 @@ import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.springframework.kafka.config.StreamsBuilderFactoryBean;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.util.Spliterators;
 
 import static com.learnkafkastreams.topology.OrdersTopology.*;
@@ -26,8 +28,15 @@ public class OrderStoreService {
         };
     }
 
-    private ReadOnlyKeyValueStore<String, Long> getKeyValueStore(String storeName) {
+    public ReadOnlyKeyValueStore<String, TotalRevenue> getOrderRevenueStore(String orderType) {
+        return switch (orderType) {
+            case GENERAL_ORDERS -> getKeyValueStore(GENERAL_ORDERS_REVENUE);
+            case RESTAURANT_ORDERS -> getKeyValueStore(RESTAURANT_ORDERS_REVENUE);
+            default -> throw new IllegalArgumentException("no valid order type");
+        };
+    }
 
+    private <T> ReadOnlyKeyValueStore<String,T> getKeyValueStore(String storeName) {
         return streamsBuilderFactoryBean.getKafkaStreams()
                                         .store(StoreQueryParameters.fromNameAndType(storeName, QueryableStoreTypes.keyValueStore()));
     }
