@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Objects;
 
 @AllArgsConstructor
 @RestController
@@ -19,8 +20,11 @@ public class OrdersWindowedController {
     /**
      * @return All Orders Count for  Windows by Order Type
      */
-    @GetMapping("/windows/count/{orderType}")
-    public ResponseEntity<List<OrdersCountPerStoreByWindowsDTO>> getWindowedOrdersCountsByLocationId(@PathVariable("orderType") String orderType, @PathVariable(value = "location_id", required=false) String locationId) {
+    @GetMapping({"/windows/count", "/windows/count/{orderType}", "/windows/count/{orderType}/{location_id}"})
+    public ResponseEntity<List<OrdersCountPerStoreByWindowsDTO>> getWindowedOrdersCountsByLocationId(@PathVariable(value="orderType", required=false) String orderType, @PathVariable(value="location_id", required=false) String locationId) {
+        if (Objects.isNull(orderType)) {
+            return ResponseEntity.ok(orderWindowsService.getAllWindowOrdersCounts(locationId));
+        }
         return ResponseEntity.ok(orderWindowsService.getWindowedOrdersCounts(orderType, locationId));
     }
 }

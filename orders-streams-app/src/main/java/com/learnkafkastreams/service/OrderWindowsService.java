@@ -1,6 +1,8 @@
 package com.learnkafkastreams.service;
 
+import com.learnkafkastreams.domain.AllOrdersCountPerStoreDTO;
 import com.learnkafkastreams.domain.OrdersCountPerStoreByWindowsDTO;
+import com.learnkafkastreams.topology.OrdersTopology;
 import com.learnkafkastreams.util.OrdersUtil;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -18,6 +20,8 @@ import java.util.Optional;
 import java.util.Spliterator;
 import java.util.Spliterators;
 import java.util.stream.StreamSupport;
+
+import static com.learnkafkastreams.util.OrdersUtil.getOrderTypeFromTopology;
 
 @AllArgsConstructor
 @Service
@@ -37,6 +41,14 @@ public class OrderWindowsService {
                 .map((keyValue) -> buildDto(keyValue, orderType))
                 .toList();
 
+    }
+
+    public List<OrdersCountPerStoreByWindowsDTO> getAllWindowOrdersCounts(String locationId) {
+        return List.of(OrdersTopology.GENERAL_ORDERS, OrdersTopology.RESTAURANT_ORDERS)
+                .stream()
+                .map(orderType -> getWindowedOrdersCounts(orderType, locationId).stream().toList())
+                .flatMap(List::stream)
+                .toList();
     }
 
     private OrdersCountPerStoreByWindowsDTO buildDto(KeyValue<Windowed<String>, Long> keyValue, String orderType) {
